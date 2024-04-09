@@ -234,7 +234,7 @@ public class Factorizer implements Servlet {
 - 작업마다 스레드를 생성하는 정책은 상용서비스에서 사용하기는 무리
 - 특정 상황에서 엄청나게 많은 대량의 스레드가 생성할 수 있는데 단점이 발생함
 
-**스레드 라이프 사이클 문제 **
+**스레드 라이프 사이클 문제**
 
 - 스레드를 생성하고 제거하는 작업에도 자원이 소모
 - 스레드를 생성하는 과정에는 일정량의 시간이 필요 따라서 클라이언트 요청을 처리할때 딜레이가 발생
@@ -269,3 +269,19 @@ public class Factorizer implements Servlet {
 - Thread를 계속 생성하게 되면 oom 발생여지가 있음
 - Thread의 Context-Switch 비용이 많이 발생 -> 로직 느려짐
 - 물론, 돈이 많은 구조라면, Thread를 많이 생성하는 것도 좋은 방식이라고 생각함 (Thread에 대한 유후시간 처리가 복잡하니까)
+
+
+
+### 고민해볼 문제
+
+1. 현재 우리가 구성하는 Spring + JPA 구조에서 발생할 수 있는 OOM은 무엇이 있을까?
+    - https://velog.io/@recordsbeat/JPA-hibernate-Plan-Cache%EB%A1%9C-%EC%9D%B8%ED%95%9C-OutOfMemory-%ED%95%B4%EA%B2%B0
+2. Thread-Pool Size는 어떻게 조절해야 하는가?
+    ```
+    L = λ * W
+
+    L - the number of requests processed simultaneously
+    λ – long-term average arrival rate (RPS)
+    W – the average time to handle the request (latency)
+    ```
+    - n = cpu개수*2 +1
