@@ -83,12 +83,13 @@ public class AsyncConfig extends AsyncConfigurerSupport {
 
 ```
 데이터 공유 모델, 분할 데이터 모델이라는 내용이 9장에 나왔는데,
-api 서버로 보면 각각의 레이어가 서로 다른 모델 정보를 다뤄야 한다?라고 생각해 볼 수 있을 것 같다.
+api 서버로 보면 각각의 레이어가 서로 다른 모델 정보를 다뤄야 한다?라고도 생각해 볼 수 있을 것 같다.
 
 그렇다면, 우리는 api-server를 만들때, DTO, Model을 각각의 Layer마다 서로 다르게 설정하나?
 혹은 다들 사용하는 방식은?
 
 exampe) controller, service, repository 모두 다른 모델 (인스턴스)를 사용.
+controller에서 requestA를 사용, service에서는 requestB를 사용, repostory에서는 별도의 모델C를 사용
 ```
 
 3. Thread의 수 혹은 메모리 등의 다양한 지표에 대한 모니터링을 하는가? 한다면 목적은?
