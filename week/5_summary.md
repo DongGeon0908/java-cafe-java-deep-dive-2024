@@ -94,3 +94,149 @@ controller에서 requestA를 사용, service에서는 requestB를 사용, repost
 
 3. Thread의 수 혹은 메모리 등의 다양한 지표에 대한 모니터링을 하는가? 한다면 목적은?
 - Thread와 Memory의 수가 적정한지 파악을 해얄하는 이유는?
+
+4. @Async를 통해 비동기 처리를 많이 하는데, @Async(valie=) 설정에 pool을 지정하지 않았다면?
+
+- 1. TaskExecutor 관련 빈이 있는지 확인, 없다면 SimpleAsyncTaskExecutor 사용
+```
+이 구현은 컨텍스트에서 고유한 org.springframework.core.task.TaskExecutor 빈을 검색하거나 그렇지 않으면 "taskExecutor"라는 이름의 Executor 빈을 검색합니다. 둘 중 어느 것도 해결 가능하지 않은 경우(예: BeanFactory 전혀 구성되지 않은 경우) 이 구현은 기본값을 찾을 수 없는 경우 로컬 사용을 위해 새로 생성된 SimpleAsyncTaskExecutor 인스턴스로 대체됩니다.
+
+	/**
+	 * This implementation searches for a unique {@link org.springframework.core.task.TaskExecutor}
+	 * bean in the context, or for an {@link Executor} bean named "taskExecutor" otherwise.
+	 * If neither of the two is resolvable (e.g. if no {@code BeanFactory} was configured at all),
+	 * this implementation falls back to a newly created {@link SimpleAsyncTaskExecutor} instance
+	 * for local use if no default could be found.
+	 * @see #DEFAULT_TASK_EXECUTOR_BEAN_NAME
+	 */
+	@Override
+	@Nullable
+	protected Executor getDefaultExecutor(@Nullable BeanFactory beanFactory) {
+		Executor defaultExecutor = super.getDefaultExecutor(beanFactory);
+		return (defaultExecutor != null ? defaultExecutor : new SimpleAsyncTaskExecutor());
+	}
+```
+
+- 2. SimpleAsyncTaskExecutor()에 대해
+ 
+```
+/**
+ * {@link TaskExecutor} implementation that fires up a new Thread for each task,
+ * executing it asynchronously. Provides a virtual thread option on JDK 21.
+ *
+ * <p>Supports a graceful shutdown through {@link #setTaskTerminationTimeout},
+ * at the expense of task tracking overhead per execution thread at runtime.
+ * Supports limiting concurrent threads through {@link #setConcurrencyLimit}.
+ * By default, the number of concurrent task executions is unlimited.
+ *
+ * <p><b>NOTE: This implementation does not reuse threads!</b> Consider a
+ * thread-pooling TaskExecutor implementation instead, in particular for
+ * executing a large number of short-lived tasks. Alternatively, on JDK 21,
+ * consider setting {@link #setVirtualThreads} to {@code true}.
+ *
+ * @author Juergen Hoeller
+ * @since 2.0
+ * @see #setVirtualThreads
+ * @see #setTaskTerminationTimeout
+ * @see #setConcurrencyLimit
+ * @see org.springframework.scheduling.concurrent.SimpleAsyncTaskScheduler
+ * @see org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
+ */
+@SuppressWarnings({"serial", "deprecation"})
+public class SimpleAsyncTaskExecutor extends CustomizableThreadCreator
+		implements AsyncListenableTaskExecutor, Serializable, AutoCloseable {
+
+	/**
+	 * Permit any number of concurrent invocations: that is, don't throttle concurrency.
+	 * @see ConcurrencyThrottleSupport#UNBOUNDED_CONCURRENCY
+	 */
+	public static final int UNBOUNDED_CONCURRENCY = ConcurrencyThrottleSupport.UNBOUNDED_CONCURRENCY;
+
+	/**
+	 * Switch concurrency 'off': that is, don't allow any concurrent invocations.
+	 * @see ConcurrencyThrottleSupport#NO_CONCURRENCY
+	 */
+	public static final int NO_CONCURRENCY = ConcurrencyThrottleSupport.NO_CONCURRENCY;
+
+
+	/** Internal concurrency throttle used by this executor. */
+	private final ConcurrencyThrottleAdapter concurrencyThrottle = new ConcurrencyThrottleAdapter();
+
+	@Nullable
+	private VirtualThreadDelegate virtualThreadDelegate;
+
+	@Nullable
+	private ThreadFactory threadFactory;
+
+	@Nullable
+	private TaskDecorator taskDecorator;
+
+	private long taskTerminationTimeout;
+
+	@Nullable
+	private Set<Thread> activeThreads;
+
+	private volatile boolean active = true;
+```
+
+- 3. 그런데, 여기서 @EnableAsync를 사용하는 경우, 조금 다르게 동작한다.
+- [Spring](https://docs.spring.io/spring-boot/docs/2.1.13.RELEASE/reference/html/boot-features-task-execution-scheduling.html)
+
+```
+다음과 같이 진행
+/**
+ * {@link EnableAutoConfiguration Auto-configuration} for {@link TaskExecutor}.
+ *
+ * @author Stephane Nicoll
+ * @author Camille Vienot
+ * @author Moritz Halbritter
+ * @since 2.1.0
+ */
+@ConditionalOnClass(ThreadPoolTaskExecutor.class)
+@AutoConfiguration
+@EnableConfigurationProperties(TaskExecutionProperties.class)
+@Import({ TaskExecutorConfigurations.ThreadPoolTaskExecutorBuilderConfiguration.class,
+		TaskExecutorConfigurations.TaskExecutorBuilderConfiguration.class,
+		TaskExecutorConfigurations.SimpleAsyncTaskExecutorBuilderConfiguration.class,
+		TaskExecutorConfigurations.TaskExecutorConfiguration.class })
+public class TaskExecutionAutoConfiguration {
+
+	/**
+	 * Bean name of the application {@link TaskExecutor}.
+	 */
+	public static final String APPLICATION_TASK_EXECUTOR_BEAN_NAME = "applicationTaskExecutor";
+
+}
+
+		/**
+		 * Queue capacity. An unbounded capacity does not increase the pool and therefore
+		 * ignores the "max-size" property.
+		 */
+		private int queueCapacity = Integer.MAX_VALUE;
+
+		/**
+		 * Core number of threads.
+		 */
+		private int coreSize = 8;
+
+		/**
+		 * Maximum allowed number of threads. If tasks are filling up the queue, the pool
+		 * can expand up to that size to accommodate the load. Ignored if the queue is
+		 * unbounded.
+		 */
+		private int maxSize = Integer.MAX_VALUE;
+
+		/**
+		 * Whether core threads are allowed to time out. This enables dynamic growing and
+		 * shrinking of the pool.
+		 */
+		private boolean allowCoreThreadTimeout = true;
+
+		/**
+		 * Time limit for which threads may remain idle before being terminated.
+		 */
+		private Duration keepAlive = Duration.ofSeconds(60);
+
+```
+
+
